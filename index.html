@@ -2051,7 +2051,7 @@ amSetsUI();
     if(!C){badge('Scanner: Capacitor not found - this is not the Android app build',false);return}
     var plat=C.getPlatform?C.getPlatform():'unknown';
     if(plat!=='android'){badge('Scanner: platform is '+plat+', not android',false);return}
-    var MS=C.registerPlugin('MusicScanner');
+    var MS=(typeof C.registerPlugin==='function')?C.registerPlugin('MusicScanner'):(C.Plugins&&C.Plugins.MusicScanner);if(!MS){badge('Scanner: MusicScanner plugin not found in app',false);return}var csrc=(typeof C.convertFileSrc==='function')?function(p){return C.convertFileSrc('file://'+p)}:function(p){return location.origin+'/_capacitor_file_'+p};
     var busy=false;
     async function scanPhone(){
       if(busy)return;busy=true;
@@ -2070,7 +2070,7 @@ amSetsUI();
           st.textContent='Importing '+(i+1)+' of '+todo.length+' · '+(t.title||t.name);
           try{
             var cp=await MS.copyToCache({id:t.id,name:t.name});
-            var r=await fetch(C.convertFileSrc('file://'+cp.path));
+            var r=await fetch(csrc(cp.path));
             var b=await r.blob();
             var f=new File([b],t.name||('track'+t.id),{type:t.mime||b.type||'audio/mpeg'});
             var e=await analyzeAndStore(f);
