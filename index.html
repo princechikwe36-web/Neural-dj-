@@ -623,7 +623,7 @@ function panel(d){
     h=`<div class="ph"><span>HOT CUE</span><button data-k="${d.k}" data-a="hotremove" class="${d.removeHot?'on':''}" style="padding:2px 5px">${d.removeHot?'REMOVE: ON':'REMOVE'}</button></div><div class="grid" style="grid-template-columns:repeat(6,1fr);grid-template-rows:repeat(3,1fr)">${Array.from({length:18},(_,i)=>{const set=d.hot[i]!=null;const col=HC[i%HC.length];return `<button data-k="${d.k}" data-a="hot" data-v="${i}" class="${set?'on':''}" style="${set?`background:${col};border-color:${col};color:#111`:''}">${i+1}</button>`}).join('')}</div>`}
   if(m==='fx'){h=hd(d.fm,'fm');
     if(d.fm==='knob fx'){const n=['Echo','Phaser','Rocket','Break','Reverb','Flanger','Drive','Gate','Range','Lo-Fi','Chorus','Riser'];h+=`<div class="kg" style="grid-template-columns:repeat(4,1fr);flex:1">${n.map((l,i)=>{d.p['f'+i]??=0;return kn(d,'f'+i,0,1,l)}).join('')}</div>`}
-    else h+=`<div class="pad" data-k="${d.k}"><i></i></div>`;
+    else if(d.fm==='swipe')h+=swipeHtml(d);else h+=`<div class="pad" data-k="${d.k}"><i></i></div>`;
     h+=`<div class="pf"><button>FX</button></div>`}
   pa.innerHTML=h;
   if(m==='plat'){try{const dc=$('disc'+d.k),ab=$('t'+d.k).querySelector('.art');if(dc&&ab){const bg=ab.style.backgroundImage;if(bg&&bg!=='none')dc.style.setProperty('--cover',bg);else dc.style.removeProperty('--cover')}if(dc&&typeof showArm!=='undefined')dc.classList.toggle('line-hidden',!showArm)}catch(e){}}
@@ -650,10 +650,10 @@ document.addEventListener('click',e=>{
   if(a==='pn'){d.pn=(v&&d.pn===v)?0:v;panel(d)}
   if(a==='sync'){const pair={A:'B',B:'A',C:'D',D:'C'};const o=D[pair[d.k]];if(o){syncDeck(d,o);t.classList.toggle('on',!!d.synced)}}
   if(a==='lm-'||a==='lm+'){d.lm=d.lm==='Auto'?'Jump':'Auto';panel(d)}
-  if(a==='fm-'||a==='fm+'){d.fm=d.fm==='echo'?'knob fx':'echo';panel(d)}
+  if(a==='fm-'||a==='fm+'){const L=['knob fx','echo','swipe'];d.fm=L[(L.indexOf(d.fm)+(a==='fm+'?1:2))%3];panel(d)}
   if(a==='bs-'||a==='bs+'){d.beats=Math.max(.5,Math.min(64,d.beats*(a==='bs+'?2:.5)));if(d.loop){d.loop.e=d.loop.s+d.beats*beat(d);restart(d)}panel(d)}
-  if(a==='jp'){d.jump=v;if(d.buf)seek(d,pos(d)+v*beat(d)*4);panel(d)}
-  if(a==='loop'){if(d.loop)d.loop=null;else{const s=pos(d),n=d.lm==='Auto'?d.beats:d.jump*4;d.loop={s,e:s+n*beat(d)}}restart(d);panel(d)}
+  if(a==='jp'){d.jump=v;if(d.buf){const s0=pos(d);if(d.loop&&d.bounceV===v){d.loop=null;d.bounceV=null}else{d.loop={s:s0,e:s0+v*4*beat(d)};d.bounceV=v}if(d.playing){d.off=s0;d.t0=AC.currentTime}restart(d)}panel(d)}
+  if(a==='loop'){if(d.loop){const p0=pos(d);d.loop=null;if(d.playing){d.off=p0;d.t0=AC.currentTime}}else{const s=pos(d),n=d.lm==='Auto'?d.beats:d.jump*4;d.loop={s,e:s+n*beat(d)}}restart(d);panel(d)}
   if(a==='hotremove'){d.removeHot=!d.removeHot;panel(d)}
   if(a==='hot'){if(d.removeHot){d.hot[v]=null;panel(d);if(d.trackwave)drawTrackWave(d)}else if(d.hot[v]==null){d.hot[v]=pos(d);panel(d);if(d.trackwave)drawTrackWave(d)}else{seek(d,d.hot[v]);if(S.autoCuePlay&&!d.playing)play(d)}}
 });
@@ -688,7 +688,7 @@ document.addEventListener('pointerdown',e=>{const k=e.target.closest('.kn[data-p
 document.addEventListener('pointermove',e=>{if(kd){const k=kd.k,a=+k.dataset.min,b=+k.dataset.max;setP(D[k.dataset.k],k.dataset.p,Math.max(a,Math.min(b,kd.v+(kd.y-e.clientY)/90*(b-a))))}
   const p=e.target.closest('.pad');if(p&&p.dn)pad(p,e)});
 document.addEventListener('pointerup',()=>{kd=null;document.querySelectorAll('.pad').forEach(p=>{if(p.dn&&D[p.dataset.k])fxPadEnd(D[p.dataset.k]);p.dn=0;p.firstChild.style.display='none'})});
-function pad(p,e){const r=p.getBoundingClientRect(),i=p.firstChild;i.style.display='block';i.style.left=(e.clientX-r.left)+'px';i.style.top=(e.clientY-r.top)+'px';const dd=D[p.dataset.k];if(dd)fxPad(dd,Math.max(0,Math.min(1,(e.clientX-r.left)/r.width)),Math.max(0,Math.min(1,1-(e.clientY-r.top)/r.height)))}
+function pad(p,e){const r=p.getBoundingClientRect(),i=p.firstChild;i.style.display='block';i.style.left=Math.max(0,Math.min(r.width,e.clientX-r.left))+'px';i.style.top=Math.max(0,Math.min(r.height,e.clientY-r.top))+'px';const dd=D[p.dataset.k];if(dd)fxPad(dd,Math.max(0,Math.min(1,(e.clientX-r.left)/r.width)),Math.max(0,Math.min(1,1-(e.clientY-r.top)/r.height)))}
 
 let ld=null;
 document.addEventListener('click',e=>{
@@ -2041,51 +2041,129 @@ amSetsUI();
 </script><script>
 /* ===== Android app only: scan the phone's music automatically ===== */
 (function(){
-  var C=window.Capacitor;
-  if(!C||!C.isNativePlatform||!C.isNativePlatform())return;
-  var MS=C.registerPlugin('MusicScanner');
-  var busy=false;
-  async function scanPhone(){
-    if(busy)return;busy=true;
-    var st=$('libStatus');
-    try{
-      st.textContent='Looking for songs on your phone…';
-      var res=await MS.scan();
-      var all=res.tracks||[];
-      var todo=all.filter(function(t){
-        return !libCache.some(function(x){return x.filename===t.name&&x.blob&&x.blob.size===t.size});
-      });
-      if(!todo.length){st.textContent='Found '+all.length+' songs. All are already in your library.';busy=false;return}
-      var ok=0,fail=0;
-      for(var i=0;i<todo.length;i++){
-        var t=todo[i];
-        st.textContent='Importing '+(i+1)+' of '+todo.length+' · '+(t.title||t.name);
-        try{
-          var cp=await MS.copyToCache({id:t.id,name:t.name});
-          var r=await fetch(C.convertFileSrc('file://'+cp.path));
-          var b=await r.blob();
-          var f=new File([b],t.name||('track'+t.id),{type:t.mime||b.type||'audio/mpeg'});
-          var e=await analyzeAndStore(f);
-          if(e){libCache.push(e);ok++}else fail++;
-        }catch(err){fail++}
-        if(i%5===4)renderLibrary();
-      }
-      try{await MS.cleanup()}catch(e){}
-      renderLibrary();
-      st.textContent='Imported '+ok+' of '+todo.length+' new songs'+(fail?' · '+fail+' skipped':'');
-    }catch(err){
-      st.textContent=(err&&err.message)?err.message:'Could not scan songs';
-    }
-    busy=false;
+  function badge(msg,ok){
+    var d=document.createElement('div');d.textContent=msg;
+    d.style.cssText='position:fixed;left:8px;right:8px;top:8px;z-index:99999;padding:8px 12px;border-radius:8px;font:13px sans-serif;color:#fff;background:'+(ok?'#15803d':'#b91c1c');
+    document.body.appendChild(d);setTimeout(function(){d.remove()},ok?4000:20000);
   }
-  $('libImport').onclick=scanPhone;
-  $('libAllow').onclick=function(){
-    try{localStorage.setItem('neuralLibraryAccess','allowed')}catch(e){}
-    $('libPermission').classList.add('hide');
-    scanPhone();
-  };
-  var p=document.querySelector('#libPermission .nlPermissionCard p');
-  if(p)p.textContent='Choose Allow and Neural DJ will find the songs on your phone and add them to your library.';
+  try{
+    var C=window.Capacitor;
+    if(!C){badge('Scanner: Capacitor not found - this is not the Android app build',false);return}
+    var plat=C.getPlatform?C.getPlatform():'unknown';
+    if(plat!=='android'){badge('Scanner: platform is '+plat+', not android',false);return}
+    var MS=C.registerPlugin('MusicScanner');
+    var busy=false;
+    async function scanPhone(){
+      if(busy)return;busy=true;
+      var st=$('libStatus');
+      try{
+        st.textContent='Looking for songs on your phone…';
+        var res=await MS.scan();
+        var all=res.tracks||[];
+        var todo=all.filter(function(t){
+          return !libCache.some(function(x){return x.filename===t.name&&x.blob&&x.blob.size===t.size});
+        });
+        if(!todo.length){st.textContent='Found '+all.length+' songs. All are already in your library.';busy=false;return}
+        var ok=0,fail=0;
+        for(var i=0;i<todo.length;i++){
+          var t=todo[i];
+          st.textContent='Importing '+(i+1)+' of '+todo.length+' · '+(t.title||t.name);
+          try{
+            var cp=await MS.copyToCache({id:t.id,name:t.name});
+            var r=await fetch(C.convertFileSrc('file://'+cp.path));
+            var b=await r.blob();
+            var f=new File([b],t.name||('track'+t.id),{type:t.mime||b.type||'audio/mpeg'});
+            var e=await analyzeAndStore(f);
+            if(e){libCache.push(e);ok++}else fail++;
+          }catch(err){fail++}
+          if(i%5===4)renderLibrary();
+        }
+        try{await MS.cleanup()}catch(e){}
+        renderLibrary();
+        st.textContent='Imported '+ok+' of '+todo.length+' new songs'+(fail?' · '+fail+' skipped':'');
+      }catch(err){
+        var m=(err&&err.message)?err.message:'Could not scan songs';
+        st.textContent=m;badge('Scan error: '+m,false);
+      }
+      busy=false;
+    }
+    $('libImport').onclick=scanPhone;
+    $('libAllow').onclick=function(){
+      try{localStorage.setItem('neuralLibraryAccess','allowed')}catch(e){}
+      $('libPermission').classList.add('hide');
+      scanPhone();
+    };
+    var p=document.querySelector('#libPermission .nlPermissionCard p');
+    if(p)p.textContent='Choose Allow and Neural DJ will find the songs on your phone and add them to your library.';
+    badge('Scanner ready (android)',true);
+  }catch(e){badge('Scanner error: '+e.message,false)}
+})();
+</script>
+<script>
+/* Samplers must not follow you to Home / Settings */
+(function(){
+  function closeSamplers(){['saPanelL','saPanelR'].forEach(function(id){var el=document.getElementById(id);if(el)el.classList.remove('open')})}
+  ['home','set','amHome','amSet'].forEach(function(id){
+    var b=document.getElementById(id);
+    if(b)b.addEventListener('click',closeSamplers,true);
+  });
+})();
+</script>
+<script>
+/* Crossfader cut: released in the middle after starting at an end -> springs back to that end */
+(function(){
+  var xf=document.getElementById('xf');if(!xf)return;
+  var st=null;
+  xf.addEventListener('pointerdown',function(){
+    var mn=+xf.min||0,mx=+xf.max||1,r=mx-mn,v=(+xf.value-mn)/r;
+    st=(v<=.08)?mn:(v>=.92)?mx:null;
+  },true);
+  function back(){
+    if(st===null)return;
+    var mn=+xf.min||0,mx=+xf.max||1,v=(+xf.value-mn)/(mx-mn);
+    if(v>.1&&v<.9){xf.value=st;setX(+st)}
+    st=null;
+  }
+  xf.addEventListener('pointerup',back);
+  xf.addEventListener('pointercancel',back);
+})();
+</script>
+<style>
+.swp{position:relative;height:46px;margin:3px 0;border:1px solid var(--ln);border-radius:6px;background:#0007;touch-action:none;overflow:hidden}
+.swp span{position:absolute;left:8px;top:50%;transform:translateY(-50%);font-size:12px;pointer-events:none}
+.swp i{position:absolute;top:0;bottom:0;width:3px;left:50%;background:var(--ac2,#7c3aed);display:none;pointer-events:none}
+.swh{width:100%;margin-top:3px}
+</style>
+<script>
+/* FX Swipe: swipe left/right on a pad to move the filter with an effect */
+var SWFX=[['Echo out 1/8',0],['Gate 1/16',7],['Alarm 1/16',11]];
+function swipeHtml(d){
+  return SWFX.map(function(f){return '<div class="swp" data-k="'+d.k+'" data-fx="'+f[1]+'"><span>'+f[0]+'</span><i></i></div>'}).join('')
+   +'<button class="swh'+(d.swHold?' on':'')+'" data-k="'+d.k+'" data-swhold="1">HOLD</button>';
+}
+(function(){
+  var cur=null;
+  function apply(e){
+    var r=cur.getBoundingClientRect(),d=D[cur.dataset.k],i=+cur.dataset.fx;if(!d)return;
+    var x=Math.max(0,Math.min(1,(e.clientX-r.left)/r.width)),v=(x-.5)*2;
+    var ind=cur.querySelector('i');ind.style.display='block';ind.style.left=(x*100)+'%';
+    setP(d,'fil',v);fxSet(d,i,Math.min(1,Math.abs(v)*1.2));
+  }
+  function release(d,el){
+    if(d.swHold)return;
+    el.querySelector('i').style.display='none';
+    setP(d,'fil',0);fxSet(d,+el.dataset.fx,d.p['f'+el.dataset.fx]||0);
+  }
+  document.addEventListener('pointerdown',function(e){
+    var h=e.target.closest&&e.target.closest('[data-swhold]');
+    if(h){var d=D[h.dataset.k];d.swHold=!d.swHold;h.classList.toggle('on',d.swHold);
+      if(!d.swHold){document.querySelectorAll('.swp[data-k='+d.k+']').forEach(function(el){release(d,el)})}return}
+    var p=e.target.closest&&e.target.closest('.swp');if(!p)return;
+    cur=p;try{p.setPointerCapture(e.pointerId)}catch(x){}apply(e);e.preventDefault();
+  });
+  document.addEventListener('pointermove',function(e){if(cur)apply(e)});
+  function up(){if(!cur)return;var d=D[cur.dataset.k];if(d)release(d,cur);cur=null}
+  document.addEventListener('pointerup',up);document.addEventListener('pointercancel',up);
 })();
 </script>
 </body></html>
