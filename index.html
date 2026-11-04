@@ -1645,11 +1645,10 @@ function drawBeatMatch(c,pair,now){
     if(d.pk&&d.buf){
       const p=pos(d),win=8,n=d.pk.length,dur=d.buf.duration;
       x.fillStyle=i?'#55e6a5':'#55a6ff';
-      for(let px=0;px<w;px+=3){
-        const tt=p+((px/w)-.5)*2*win,idx=(tt/dur*n)|0;
-        if(idx<0||idx>=n)continue;
-        const a=Math.max(1,d.pk[idx]*amp);
-        x.fillRect(px,mid-a,2,a*2);
+      const i0=Math.max(0,Math.floor((p-win)/dur*n)),i1=Math.min(n-1,Math.ceil((p+win)/dur*n)),bw=Math.max(1,w/(2*win)*dur/n);
+      for(let idx=i0;idx<=i1;idx++){
+        const xx=((idx/n*dur-p)/(2*win)+.5)*w,a=Math.max(1,d.pk[idx]*amp);
+        x.fillRect(xx,mid-a,Math.max(1,bw-.5),a*2);
       }
     }
     if(d.buf){
@@ -1667,7 +1666,7 @@ function drawBeatMatch(c,pair,now){
 }
 function wave(now=performance.now()){
   // Beat-match canvases capped to about 10 frames/second.
-  if(now-lastWaveDraw<100)return;
+  if(now-lastWaveDraw<16)return;
   lastWaveDraw=now;
   drawBeatMatch(wf,['A','B'],now);
   drawBeatMatch($('wfCD'),['C','D'],now);
@@ -2205,6 +2204,34 @@ function swipeHtml(d){
     draw();
   });
   setInterval(function(){if(box.style.display==='block')draw()},2000);
+})();
+</script>
+<script>
+/* Jog wheel: touching it stops the deck (scratch hold); letting go resumes */
+(function(){
+  document.addEventListener('pointerdown',function(){
+    if(jogState&&jogState.d){var d=jogState.d;jogState.was=!!d.playing;if(d.playing)pause(d)}
+  });
+  function rel(){
+    if(jogState&&jogState.was){var d=jogState.d;jogState.was=false;play(d)}
+  }
+  document.addEventListener('pointerup',rel,true);
+  document.addEventListener('pointercancel',rel,true);
+})();
+/* Automatic sync: a deck that starts while its partner plays locks to it by itself */
+(function(){
+  var _play=play,_sd=syncDeck,pair={A:'B',B:'A',C:'D',D:'C'};
+  syncDeck=function(d,o){var was=d.synced;_sd(d,o);if(was&&!d.synced)d.noAuto=true;else if(d.synced)d.noAuto=false};
+  play=function(d){
+    var r=_play.apply(this,arguments);
+    try{
+      var o=D[pair[d.k]];
+      if(d.buf&&o&&o.buf&&o.playing&&!d.synced&&!o.synced&&!d.noAuto){
+        setTimeout(function(){if(d.playing&&o.playing&&!d.synced&&!o.synced)_sd(d,o)},80);
+      }
+    }catch(e){}
+    return r;
+  };
 })();
 </script>
 </body></html>
