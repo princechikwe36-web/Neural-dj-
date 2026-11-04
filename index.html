@@ -2173,4 +2173,38 @@ function swipeHtml(d){
   document.addEventListener('pointerup',up);document.addEventListener('pointercancel',up);
 })();
 </script>
+<style>
+#bpmFix{position:fixed;left:6px;bottom:6px;z-index:99998;font:12px sans-serif}
+#bpmFix>button{padding:6px 10px;border-radius:14px;border:1px solid #888;background:#000c;color:#fff}
+#bpmBox{display:none;margin-bottom:4px;padding:8px;background:#000e;border:1px solid #666;border-radius:8px;color:#fff;min-width:240px}
+#bpmBox .r{display:flex;align-items:center;gap:4px;margin:3px 0}
+#bpmBox b{width:14px}#bpmBox span{flex:1;text-align:center}
+#bpmBox button{padding:5px 9px;background:#333;color:#fff;border:1px solid #666;border-radius:6px}
+</style>
+<div id="bpmFix"><div id="bpmBox"></div><button id="bpmBtn">BPM fix</button></div>
+<script>
+/* BPM fix: correct a wrong BPM (half/double/fine) and re-measure the beat grid */
+(function(){
+  var box=document.getElementById('bpmBox'),btn=document.getElementById('bpmBtn');
+  function draw(){
+    var h='<div style="margin-bottom:4px">Audio delay: '+Math.round(((AC.baseLatency||0)+(AC.outputLatency||0))*1000)+' ms</div>';
+    ['A','B','C','D'].forEach(function(k){
+      var d=D[k];if(!d||!d.buf)return;
+      h+='<div class="r"><b>'+k+'</b><button data-bk="'+k+'" data-m="h">½</button><button data-bk="'+k+'" data-m="-">−</button><span>'+(d.bpm||BPM).toFixed(1)+'</span><button data-bk="'+k+'" data-m="+">+</button><button data-bk="'+k+'" data-m="x">×2</button></div>';
+    });
+    box.innerHTML=h;
+  }
+  btn.onclick=function(){var on=box.style.display!=='block';box.style.display=on?'block':'none';if(on)draw()};
+  ['pointerdown','pointerup','touchstart'].forEach(function(t){box.addEventListener(t,function(e){e.stopPropagation()})});
+  box.addEventListener('click',function(e){
+    var b=e.target.closest('[data-bk]');if(!b)return;
+    var d=D[b.dataset.bk],m=b.dataset.m,v=d.bpm||BPM;
+    if(m==='h')v/=2;else if(m==='x')v*=2;else if(m==='+')v+=.1;else v-=.1;
+    d.bpm=Math.max(40,Math.min(240,v));
+    try{refreshGrid(d)}catch(x){}
+    draw();
+  });
+  setInterval(function(){if(box.style.display==='block')draw()},2000);
+})();
+</script>
 </body></html>
