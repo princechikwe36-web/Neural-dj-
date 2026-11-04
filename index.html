@@ -696,7 +696,7 @@ document.addEventListener('click',e=>{
   if(!art&&!title)return;
   const host=(art||title).closest('[id^="t"]');
   const k=host?.id?.slice(1);
-  if(k&&D[k]){ld=D[k];fi.click()}
+  if(k&&D[k]){ld=D[k];if(window.__nativeLib)window.__nativeLib(k);else fi.click()}
 });
 fi.onchange=async()=>{const f=fi.files[0],d=ld;if(!f||!d)return;pause(d);
   try{
@@ -1318,7 +1318,7 @@ async function libLoadToDeck(entry){
   if(AM_LIB){amAdd(entry);return}
   // Prefer a free deck; otherwise ask via prompt-like cycle A→B→C→D
   const order=['A','B','C','D'];
-  let target=order.find(k=>!D[k].buf&&!D[k].useVideo)||'A';
+  let target=window.LIB_TARGET||order.find(k=>!D[k].buf&&!D[k].useVideo)||'A';if(window.LIB_TARGET){window.LIB_TARGET=null;$('library').classList.add('hide')}
   const d=D[target];if(!d)return;
   pause(d);
   try{
@@ -2087,6 +2087,13 @@ amSetsUI();
       }
       busy=false;
     }
+    window.__scanPhone=scanPhone;
+    window.__nativeLib=function(k){
+      window.LIB_TARGET=k;AM_LIB=false;
+      $('library').classList.remove('hide');$('libPermission').classList.add('hide');
+      loadLibrary();
+      if(!libCache.length)scanPhone();
+    };
     $('libImport').onclick=scanPhone;
     $('libAllow').onclick=function(){
       try{localStorage.setItem('neuralLibraryAccess','allowed')}catch(e){}
