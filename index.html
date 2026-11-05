@@ -669,25 +669,25 @@ document.addEventListener('pointerdown',e=>{
   if(!disc||!D[disc.dataset.k].buf)return;
   const d=D[disc.dataset.k],r=disc.getBoundingClientRect();
   const angle=Math.atan2(e.clientY-(r.top+r.height/2),e.clientX-(r.left+r.width/2));
-  jogState={d,angle,pos:pos(d),duration:d.buf.duration};
+  jogState={d,id:e.pointerId,angle,pos:pos(d),duration:d.buf.duration};
   disc.setPointerCapture?.(e.pointerId);e.preventDefault();
 });
 document.addEventListener('pointermove',e=>{
-  if(!jogState)return;
+  if(!jogState||e.pointerId!==jogState.id)return;
   const {d}=jogState,disc=document.getElementById('disc'+d.k),r=disc.getBoundingClientRect();
   const angle=Math.atan2(e.clientY-(r.top+r.height/2),e.clientX-(r.left+r.width/2));
   let delta=angle-jogState.angle;
   if(delta>Math.PI)delta-=Math.PI*2;if(delta<-Math.PI)delta+=Math.PI*2;
   seek(d,Math.max(0,Math.min(jogState.duration,jogState.pos+delta*0.8)));
 });
-document.addEventListener('pointerup',()=>{jogState=null});
-document.addEventListener('pointercancel',()=>{jogState=null});
+document.addEventListener('pointerup',e=>{if(jogState&&jogState.id===e.pointerId)jogState=null});
+document.addEventListener('pointercancel',e=>{if(jogState&&jogState.id===e.pointerId)jogState=null});
 let kd=null;
-document.addEventListener('pointerdown',e=>{const k=e.target.closest('.kn[data-p]');if(k){kd={k,y:e.clientY,v:D[k.dataset.k].p[k.dataset.p]};e.preventDefault()}
-  const p=e.target.closest('.pad');if(p){p.dn=1;pad(p,e)}});
-document.addEventListener('pointermove',e=>{if(kd){const k=kd.k,a=+k.dataset.min,b=+k.dataset.max;setP(D[k.dataset.k],k.dataset.p,Math.max(a,Math.min(b,kd.v+(kd.y-e.clientY)/90*(b-a))))}
-  const p=e.target.closest('.pad');if(p&&p.dn)pad(p,e)});
-document.addEventListener('pointerup',()=>{kd=null;document.querySelectorAll('.pad').forEach(p=>{if(p.dn&&D[p.dataset.k])fxPadEnd(D[p.dataset.k]);p.dn=0;p.firstChild.style.display='none'})});
+document.addEventListener('pointerdown',e=>{const k=e.target.closest('.kn[data-p]');if(k){kd={k,id:e.pointerId,y:e.clientY,v:D[k.dataset.k].p[k.dataset.p]};e.preventDefault()}
+  const p=e.target.closest('.pad');if(p){p.dn=1;p.pid=e.pointerId;pad(p,e)}});
+document.addEventListener('pointermove',e=>{if(kd&&e.pointerId===kd.id){const k=kd.k,a=+k.dataset.min,b=+k.dataset.max;setP(D[k.dataset.k],k.dataset.p,Math.max(a,Math.min(b,kd.v+(kd.y-e.clientY)/90*(b-a))))}
+  const p=e.target.closest('.pad');if(p&&p.dn&&p.pid===e.pointerId)pad(p,e)});
+document.addEventListener('pointerup',e=>{if(kd&&kd.id===e.pointerId)kd=null;document.querySelectorAll('.pad').forEach(p=>{if(!p.dn||p.pid!==e.pointerId)return;if(D[p.dataset.k])fxPadEnd(D[p.dataset.k]);p.dn=0;p.firstChild.style.display='none'})});
 function pad(p,e){const r=p.getBoundingClientRect(),i=p.firstChild;i.style.display='block';i.style.left=Math.max(0,Math.min(r.width,e.clientX-r.left))+'px';i.style.top=Math.max(0,Math.min(r.height,e.clientY-r.top))+'px';const dd=D[p.dataset.k];if(dd)fxPad(dd,Math.max(0,Math.min(1,(e.clientX-r.left)/r.width)),Math.max(0,Math.min(1,1-(e.clientY-r.top)/r.height)))}
 
 let ld=null;
@@ -1656,8 +1656,9 @@ function drawBeatMatch(c,pair,now){
       const phase=((p-(d.beatOffset||0))%beatSec+beatSec)%beatSec;
       x.strokeStyle='#ffe05a';x.lineWidth=2;
       const half=Math.max(10,amp*0.95);
-      for(let q=-6;q<=6;q++){
-        const xx=w/2+(q-phase/beatSec)*(w/13);
+      const bo=d.beatOffset||0;
+      for(let q=Math.floor((p-win-bo)/beatSec);q<=Math.ceil((p+win-bo)/beatSec);q++){
+        const xx=(((bo+q*beatSec)-p)/(2*win)+.5)*w;
         if(xx>=0&&xx<=w){x.beginPath();x.moveTo(xx,mid-half);x.lineTo(xx,mid+half);x.stroke()}
       }
       x.fillStyle='#ff365e';x.fillRect(w/2-1,mid-amp,2,amp*2);
@@ -1666,7 +1667,7 @@ function drawBeatMatch(c,pair,now){
 }
 function wave(now=performance.now()){
   // Beat-match canvases capped to about 10 frames/second.
-  if(now-lastWaveDraw<16)return;
+  if(now-lastWaveDraw<33)return;
   lastWaveDraw=now;
   drawBeatMatch(wf,['A','B'],now);
   drawBeatMatch($('wfCD'),['C','D'],now);
@@ -2088,7 +2089,7 @@ amSetsUI();
     }
     window.__scanPhone=scanPhone;
     window.__nativeLib=function(k){
-      window.LIB_TARGET=k;AM_LIB=false;
+      window.LIB_TARGET=k;AM_LIB=false;$('library').style.zIndex='99990';
       $('library').classList.remove('hide');$('libPermission').classList.add('hide');
       loadLibrary();
       if(!libCache.length)scanPhone();
@@ -2122,7 +2123,8 @@ amSetsUI();
   var st=null;
   xf.addEventListener('pointerdown',function(){
     var mn=+xf.min||0,mx=+xf.max||1,r=mx-mn,v=(+xf.value-mn)/r;
-    st=(v<=.08)?mn:(v>=.92)?mx:null;
+    var cut=document.getElementById('cc')&&document.getElementById('cc').classList.contains('on');
+    st=!cut?null:(v<=.08)?mn:(v>=.92)?mx:null;
   },true);
   function back(){
     if(st===null)return;
@@ -2210,10 +2212,10 @@ function swipeHtml(d){
 /* Jog wheel: touching it stops the deck (scratch hold); letting go resumes */
 (function(){
   document.addEventListener('pointerdown',function(){
-    if(jogState&&jogState.d){var d=jogState.d;jogState.was=!!d.playing;if(d.playing)pause(d)}
+    if(jogState&&jogState.d&&jogState.was===undefined){var d=jogState.d;jogState.was=!!d.playing;if(d.playing)pause(d)}
   });
-  function rel(){
-    if(jogState&&jogState.was){var d=jogState.d;jogState.was=false;play(d)}
+  function rel(e){
+    if(jogState&&jogState.was&&e.pointerId===jogState.id){var d=jogState.d;jogState.was=false;play(d)}
   }
   document.addEventListener('pointerup',rel,true);
   document.addEventListener('pointercancel',rel,true);
@@ -2233,5 +2235,13 @@ function swipeHtml(d){
     return r;
   };
 })();
+</script>
+<script>
+/* Decks C and D open the app library too */
+document.addEventListener('click',function(e){
+  var el=e.target.closest&&e.target.closest('.art,.tt');if(!el)return;
+  var h=el.closest('[data-k]'),k=h&&h.dataset.k;
+  if((k==='C'||k==='D')&&D[k]&&window.__nativeLib){e.stopImmediatePropagation();ld=D[k];window.__nativeLib(k)}
+},true);
 </script>
 </body></html>

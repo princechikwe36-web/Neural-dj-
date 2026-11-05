@@ -37,8 +37,11 @@ jobs:
       - name: Add music scanner and permissions
         run: |
           mkdir -p android/app/src/main/java/com/neuraldj/app
-          cp MainActivity.java MusicScannerPlugin.java android/app/src/main/java/com/neuraldj/app/
+          cp MainActivity.java MusicScannerPlugin.java StemSplitterPlugin.java android/app/src/main/java/com/neuraldj/app/
           sed -i 's#</manifest>#    <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />\n    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />\n</manifest>#' android/app/src/main/AndroidManifest.xml
+          sed -i "s#dependencies {#dependencies {\n    implementation 'com.microsoft.onnxruntime:onnxruntime-android:1.17.3'#" android/app/build.gradle
+          sed -i 's/minSdkVersion = 22/minSdkVersion = 24/' android/variables.gradle
+          sed -i 's#<application#<application android:largeHeap="true"#' android/app/src/main/AndroidManifest.xml
           npx cap sync android
 
       - name: Build APK
