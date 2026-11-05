@@ -2058,6 +2058,11 @@ amSetsUI();
       var st=$('libStatus');
       try{
         st.textContent='Looking for songs on your phone…';
+        await loadLibrary();
+        var seen={},dups=[];
+        libCache.forEach(function(x){var kk=(x.filename||'')+'|'+(x.blob?x.blob.size:0);if(seen[kk])dups.push(x.id);else seen[kk]=1});
+        for(var di=0;di<dups.length;di++){var did=dups[di];try{await tx('readwrite',function(s){return s.delete(did)},'library')}catch(e){}}
+        if(dups.length)await loadLibrary();
         var res=await MS.scan();
         var all=res.tracks||[];
         var todo=all.filter(function(t){
@@ -2088,10 +2093,10 @@ amSetsUI();
       busy=false;
     }
     window.__scanPhone=scanPhone;
-    window.__nativeLib=function(k){
+    window.__nativeLib=async function(k){
       window.LIB_TARGET=k;AM_LIB=false;$('library').style.zIndex='99990';
       $('library').classList.remove('hide');$('libPermission').classList.add('hide');
-      loadLibrary();
+      await loadLibrary();
       if(!libCache.length)scanPhone();
     };
     $('libImport').onclick=scanPhone;
