@@ -1583,7 +1583,7 @@ setInterval(()=>{
     const {r,oct,own}=syncRatio(d,o);d.syncOct=oct;
     const e=syncErr(d,o,oct);
     if(Math.abs(e)>.3){seek(d,pos(d)+e*60/own);continue}
-    const cur=d.rate,adj=(Math.abs(cur-r)>.004||Math.abs(e)<.003)?0:Math.max(-.01,Math.min(.01,e*.6)),tgt=r*(1+adj),step=.0015;
+    d.eS=(d.eS||0)*.85+e*.15;const es=d.eS;d.rc=Math.max(-.02,Math.min(.02,(d.rc||0)+(Math.abs(es)<.3?es*.0008:0)));const cur=d.rate,tgt=r*(1+d.rc+(Math.abs(es)<.012?0:Math.max(-.003,Math.min(.003,es*.3)))),step=.0015;
     const nr=Math.abs(tgt-cur)<=step?tgt:cur+Math.sign(tgt-cur)*step;
     if(Math.abs(nr-cur)>1e-5)syncRate(d,nr);
     if(now-(d.showT||0)>300){d.showT=now;syncShow(d)}
@@ -1630,7 +1630,8 @@ document.addEventListener('pointerup',e=>{if(window.FDS)window.FDS.delete(e.poin
 let lastWaveDraw=0,lastTrackDraw=0;
 function drawBeatMatch(c,pair,now){
   if(!c||c.style.display!=='block')return;
-  const w=Math.max(1,c.clientWidth|0),h=Math.max(1,c.clientHeight|0);
+  if(!c._sz||now-c._szT>1000){c._sz=[c.clientWidth|0,c.clientHeight|0];c._szT=now}
+  const w=Math.max(1,c._sz[0]),h=Math.max(1,c._sz[1]);
   if(!w||!h)return;
   if(c.width!==w)c.width=w;if(c.height!==h)c.height=h;
   const x=c.getContext('2d');x.clearRect(0,0,w,h);
@@ -2194,7 +2195,7 @@ function swipeHtml(d){
 /* Automatic sync: a deck that starts while its partner plays locks to it by itself */
 (function(){
   var _play=play,_sd=syncDeck,pair={A:'B',B:'A',C:'D',D:'C'};
-  syncDeck=function(d,o){var was=d.synced;_sd(d,o);if(was&&!d.synced)d.noAuto=true;else if(d.synced)d.noAuto=false};
+  syncDeck=function(d,o){var was=d.synced;_sd(d,o);if(was&&!d.synced)d.noAuto=true;else if(d.synced)d.noAuto=false;if(d.synced&&!was){d.rc=0;d.eS=0}};
   play=function(d){
     var r=_play.apply(this,arguments);
     try{
