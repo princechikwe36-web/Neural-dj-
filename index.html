@@ -1647,9 +1647,11 @@ function drawBeatMatch(c,pair,now){
       const p=pos(d),win=8,n=d.pk.length,dur=d.buf.duration;
       x.fillStyle=i?'#55e6a5':'#55a6ff';
       const i0=Math.max(0,Math.floor((p-win)/dur*n)),i1=Math.min(n-1,Math.ceil((p+win)/dur*n)),bw=Math.max(1,w/(2*win)*dur/n);
-      for(let idx=i0;idx<=i1;idx++){
-        const xx=((idx/n*dur-p)/(2*win)+.5)*w,a=Math.max(1,d.pk[idx]*amp);
-        x.fillRect(xx,mid-a,Math.max(1,bw-.5),a*2);
+      const stp=Math.max(1,Math.floor((2*win*n/dur)/(w/3)));
+      for(let idx=Math.floor(i0/stp)*stp;idx<=i1;idx+=stp){
+        let pkv=0;for(let q=Math.max(0,idx);q<idx+stp&&q<n;q++){if(d.pk[q]>pkv)pkv=d.pk[q]}
+        const xx=((idx/n*dur-p)/(2*win)+.5)*w,a=Math.max(1,pkv*amp);
+        x.fillRect(xx,mid-a,Math.max(1,bw*stp-.5),a*2);
       }
     }
     if(d.buf){
@@ -1668,7 +1670,7 @@ function drawBeatMatch(c,pair,now){
 }
 function wave(now=performance.now()){
   // Beat-match canvases capped to about 10 frames/second.
-  if(now-lastWaveDraw<33)return;
+  if(now-lastWaveDraw<40)return;
   lastWaveDraw=now;
   drawBeatMatch(wf,['A','B'],now);
   drawBeatMatch($('wfCD'),['C','D'],now);
@@ -2223,7 +2225,7 @@ document.addEventListener('click',function(e){
   var _setP=setP;
   function inSync(d){return d.synced||d.leader||Object.keys(D).some(function(k){return D[k].synced&&D[k].syncTarget===d.k})}
   setP=function(d,k,v){
-    if(k!=='pitch'||!inSync(d))return _setP.apply(this,arguments);
+    if(k!=='pitch')return _setP.apply(this,arguments);
     if(d.synced){
       var o=D[d.syncTarget];
       if(o){
@@ -2261,8 +2263,8 @@ class WP extends AudioWorkletProcessor{
   let c=Math.round(this.an);
   if(this.pc>=0){
    const t=this.pc+H;let best=-1e30,bc=c;
-   for(let cd=c-D;cd<=c+D;cd+=2){
-    let s=0;for(let j=0;j<L;j+=4)s+=(this.g(0,cd+j)+this.g(1,cd+j))*(this.g(0,t+j)+this.g(1,t+j));
+   for(let cd=c-D;cd<=c+D;cd+=4){
+    let s=0;for(let j=0;j<L;j+=8)s+=(this.g(0,cd+j)+this.g(1,cd+j))*(this.g(0,t+j)+this.g(1,t+j));
     if(s>best){best=s;bc=cd}
    }
    c=bc;
