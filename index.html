@@ -2217,4 +2217,24 @@ document.addEventListener('click',function(e){
   if((k==='C'||k==='D')&&D[k]&&window.__nativeLib){e.stopImmediatePropagation();ld=D[k];window.__nativeLib(k)}
 },true);
 </script>
+<script>
+/* Pitch fader changes the tempo while Sync is on (no Key Lock needed); moving a follower's fader makes it the leader */
+(function(){
+  var _setP=setP;
+  function inSync(d){return d.synced||d.leader||Object.keys(D).some(function(k){return D[k].synced&&D[k].syncTarget===d.k})}
+  setP=function(d,k,v){
+    if(k!=='pitch'||!inSync(d))return _setP.apply(this,arguments);
+    if(d.synced){
+      var o=D[d.syncTarget];
+      if(o){
+        d.synced=false;d.leader=true;d.syncR=0;
+        o.synced=true;o.leader=false;o.syncTarget=d.k;o.rc=0;o.eS=0;
+        document.querySelectorAll('[data-k="'+o.k+'"][data-a="sync"]').forEach(function(x){x.classList.add('on')});
+      }
+    }
+    var kl=d.keyLock;d.keyLock=true;
+    try{return _setP.apply(this,arguments)}finally{d.keyLock=kl}
+  };
+})();
+</script>
 </body></html>
