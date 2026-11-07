@@ -580,7 +580,7 @@ Object.values(D).forEach(d=>{d.p.f8=.5});
 
 function duration(d){return d.buf?d.buf.duration:(d.vid&&isFinite(d.vid.duration)?d.vid.duration:0)}
 function pos(d){if(d.vid&&d.useVideo)return d.vid.currentTime||0;if(!d.playing)return d.off;let p=d.off+(AC.currentTime-d.t0)*d.rate;if(d.loop&&p>=d.loop.e)p=d.loop.s+((p-d.loop.s)%(d.loop.e-d.loop.s));return d.buf?Math.min(p,d.buf.duration):p}
-function play(d){if(d.playing||(!d.buf&&!d.useVideo))return;AC.resume();if(d.useVideo&&d.vid){d.vid.playbackRate=d.rate;d.vid.play().catch(()=>{});d.playing=true;ui(d);return}const s=AC.createBufferSource();s.buffer=d.buf;s.playbackRate.value=d.rate;const sg=AC.createGain();sg.gain.setValueAtTime(0,AC.currentTime);sg.gain.linearRampToValueAtTime(1,AC.currentTime+.012);s.connect(sg);sg.connect(d.trim);d.sg=sg;if(d.loop){s.loop=true;s.loopStart=d.loop.s;s.loopEnd=d.loop.e}s.start(0,d.off);d.t0=AC.currentTime;d.src=s;d.playing=true;s.onended=()=>{if(d.src===s){d.playing=false;d.off=0;ui(d)}};ui(d)}
+function play(d){if(d.playing||(!d.buf&&!d.useVideo))return;AC.resume();if(d.useVideo&&d.vid){d.vid.playbackRate=d.rate;d.vid.play().catch(()=>{});d.playing=true;ui(d);return}const s=(window.__mkSrc?window.__mkSrc(d):AC.createBufferSource());s.buffer=d.buf;s.playbackRate.value=d.rate;const sg=AC.createGain();sg.gain.setValueAtTime(0,AC.currentTime);sg.gain.linearRampToValueAtTime(1,AC.currentTime+.012);s.connect(sg);sg.connect(d.trim);d.sg=sg;if(d.loop){s.loop=true;s.loopStart=d.loop.s;s.loopEnd=d.loop.e}s.start(0,d.off);d.t0=AC.currentTime;d.src=s;d.playing=true;s.onended=()=>{if(d.src===s){d.playing=false;d.off=0;ui(d)}};ui(d)}
 function pause(d){if(!d.playing)return;const p=pos(d);if(d.useVideo&&d.vid){d.vid.pause();d.off=p;d.playing=false;ui(d);return}const so=d.src,sgn=d.sg;so.onended=null;try{const t=AC.currentTime;sgn.gain.cancelScheduledValues(t);sgn.gain.setValueAtTime(sgn.gain.value,t);sgn.gain.linearRampToValueAtTime(0,t+.012);so.stop(t+.016)}catch(e){try{so.stop()}catch(_){}}d.src=null;d.playing=false;d.off=p;ui(d)}
 function seek(d,t){const w=d.playing;if(d.useVideo&&d.vid){d.vid.currentTime=Math.max(0,Math.min(t,duration(d)||0));d.off=d.vid.currentTime;if(w)d.vid.play().catch(()=>{});return}pause(d);d.off=Math.max(0,Math.min(t,d.buf?d.buf.duration-.05:0));if(w)play(d)}
 function restart(d){const w=d.playing,p=pos(d);pause(d);d.off=p;if(w)play(d)}
@@ -2235,6 +2235,106 @@ document.addEventListener('click',function(e){
     var kl=d.keyLock;d.keyLock=true;
     try{return _setP.apply(this,arguments)}finally{d.keyLock=kl}
   };
+})();
+</script>
+<script>
+/* ===== Time-stretch engine (WSOLA): tempo changes keep the original pitch ===== */
+(function(){
+  var WSRC=`
+class WP extends AudioWorkletProcessor{
+ constructor(){
+  super();
+  this.N=2048;this.H=512;this.D=128;this.L=512;this.R=8192;
+  this.w=new Float32Array(this.N);for(let i=0;i<this.N;i++)this.w[i]=.25-.25*Math.cos(2*Math.PI*i/this.N);
+  this.o=[new Float32Array(this.R),new Float32Array(this.R)];
+  this.ch=null;this.len=0;this.run=false;this.rate=1;this.lp=false;this.ls=0;this.le=0;this.fin=false;
+  this.port.onmessage=e=>{const m=e.data;
+   if(m.t==='l'){this.ch=m.ch;this.len=m.ch[0].length}
+   else if(m.t==='s'){this.o[0].fill(0);this.o[1].fill(0);this.an=m.off;this.rate=m.rate;this.lp=m.lp;this.ls=m.ls;this.le=m.le;this.k=0;this.done=0;this.rd=0;this.pc=-1;this.fin=false;this.run=true}
+   else if(m.t==='r')this.rate=m.r;
+   else if(m.t==='x')this.run=false;
+  };
+ }
+ g(c,i){if(this.lp&&i>=this.le&&this.le>this.ls)i=this.ls+((i-this.ls)%(this.le-this.ls));return(i<0||i>=this.len)?0:this.ch[c][i]/32768}
+ frame(){
+  const N=this.N,H=this.H,L=this.L,D=this.D,M=this.R-1;
+  let c=Math.round(this.an);
+  if(this.pc>=0){
+   const t=this.pc+H;let best=-1e30,bc=c;
+   for(let cd=c-D;cd<=c+D;cd+=2){
+    let s=0;for(let j=0;j<L;j+=4)s+=(this.g(0,cd+j)+this.g(1,cd+j))*(this.g(0,t+j)+this.g(1,t+j));
+    if(s>best){best=s;bc=cd}
+   }
+   c=bc;
+  }
+  const wk=this.k*H;
+  for(let i=0;i<N;i++){const wi=this.w[i],ix=(wk+i)&M;this.o[0][ix]+=wi*this.g(0,c+i);this.o[1][ix]+=wi*this.g(1,c+i)}
+  this.pc=c;this.an+=H*this.rate;this.k++;this.done=this.k*H;
+ }
+ process(inp,out){
+  if(!this.run||!this.ch)return true;
+  const o=out[0],M=this.R-1;
+  while(!this.fin&&this.done-this.rd<128){
+   if(!this.lp&&this.an>=this.len){this.fin=true;break}
+   this.frame();
+  }
+  const n=Math.min(128,this.done-this.rd);
+  for(let i=0;i<n;i++){const ix=(this.rd+i)&M;o[0][i]=this.o[0][ix];if(o[1])o[1][i]=this.o[1][ix];this.o[0][ix]=0;this.o[1][ix]=0}
+  this.rd+=n;
+  if(this.fin&&this.rd>=this.done){this.run=false;this.port.postMessage({t:'e'})}
+  return true;
+ }
+}
+registerProcessor('wsola-player',WP);`;
+  var wk=false;
+  try{
+    var url=URL.createObjectURL(new Blob([WSRC],{type:'text/javascript'}));
+    AC.audioWorklet.addModule(url).then(function(){wk=true}).catch(function(){});
+  }catch(e){}
+  function ready(d){return wk&&d.buf&&d._stOK===d.buf}
+  /* convert the song to 16-bit in small slices, so nothing stutters */
+  function prep(d){
+    var b=d.buf;if(!wk||!b||d._stOK===b||d._stBusy===b)return;
+    d._stBusy=b;
+    var n=b.length,ch=[new Int16Array(n),new Int16Array(n)],src=[b.getChannelData(0),b.getChannelData(Math.min(1,b.numberOfChannels-1))],i=0;
+    (function step(){
+      var e=Math.min(n,i+400000);
+      for(;i<e;i++){for(var c=0;c<2;c++){var v=src[c][i]*32767;ch[c][i]=v>32767?32767:v<-32768?-32768:v}}
+      if(i<n)setTimeout(step,0);else{d._stCh=ch;d._stOK=b;d._stBusy=null}
+    })();
+  }
+  window.__mkSrc=function(d){
+    if(!ready(d)||Math.abs(d.rate-1)<=.002)return AC.createBufferSource();
+    var node=d.stNode;
+    if(!node){
+      node=new AudioWorkletNode(AC,'wsola-player',{numberOfInputs:0,numberOfOutputs:1,outputChannelCount:[2]});
+      node.port.onmessage=function(e){if(e.data.t==='e'&&node._h&&node._h.onended)node._h.onended()};
+      d.stNode=node;node._buf=null;
+    }
+    var rate=1;
+    var h={__st:true,buffer:null,loop:false,loopStart:0,loopEnd:0,onended:null,
+      playbackRate:{get value(){return rate},set value(v){rate=v;node.port.postMessage({t:'r',r:v})}},
+      connect:function(x){try{node.disconnect()}catch(e){}node.connect(x);return x},
+      start:function(w,off){
+        var sr=this.buffer.sampleRate;
+        if(node._buf!==this.buffer&&d._stCh){node.port.postMessage({t:'l',ch:d._stCh},[d._stCh[0].buffer,d._stCh[1].buffer]);node._buf=this.buffer;d._stCh=null}
+        node._h=this;
+        node.port.postMessage({t:'s',off:(off||0)*sr,rate:rate,lp:!!this.loop,ls:this.loopStart*sr,le:this.loopEnd*sr});
+      },
+      stop:function(){if(node._h===this)node.port.postMessage({t:'x'})}
+    };
+    return h;
+  };
+  /* switch between the normal and the pitch-keeping player when the tempo moves away from or back to normal */
+  var _setRate=setRate;
+  setRate=function(d,r){
+    if(d.useVideo||!d.playing||!d.src||!ready(d))return _setRate(d,r);
+    var isSt=!!d.src.__st,want=Math.abs(r-1)>(isSt?.001:.004);
+    if(want!==isSt){var p=pos(d);d.off=p;d.t0=AC.currentTime;d.rate=r;restart(d);return}
+    return _setRate(d,r);
+  };
+  var _p2=play;
+  play=function(d){var r=_p2.apply(this,arguments);try{prep(d)}catch(e){}return r};
 })();
 </script>
 </body></html>
