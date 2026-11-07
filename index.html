@@ -1548,11 +1548,11 @@ function syncErr(d,o,oct){
 }
 function syncRate(d,r){try{if(d.useVideo&&d.vid){d.rate=r;d.vid.playbackRate=r}else setRate(d,r)}catch(e){d.rate=r}}
 function syncShow(d){
-  d.p.pitch=(d.rate-1)*100;
+  d.p.pitch=((d.syncR||d.rate)-1)*100;
   document.querySelectorAll(`[data-k="${d.k}"][data-p="pitch"]`).forEach(e=>paint(e,d.p.pitch));
   if(d.pl)d.pl.textContent=d.p.pitch.toFixed(1)+'%';
 }
-function syncOff(d){d.synced=false;d.leader=false;document.querySelectorAll(`[data-k="${d.k}"][data-a="sync"]`).forEach(e=>e.classList.remove('on'))}
+function syncOff(d){d.synced=false;d.leader=false;d.syncR=0;document.querySelectorAll(`[data-k="${d.k}"][data-a="sync"]`).forEach(e=>e.classList.remove('on'))}
 function syncDeck(d,o){
   if(!d.buf||!o.buf)return;
   if(d.synced&&d.syncTarget===o.k){syncOff(d);return}
@@ -1563,7 +1563,7 @@ function syncDeck(d,o){
   const both=d.playing&&o.playing;
   if(!S.preservePitchSync){
     // Tempo match works with or without Key Lock. With both decks playing the tempo glides in (see lock loop).
-    if(true){syncRate(d,r);syncShow(d)}
+    if(true){syncRate(d,r);d.syncR=r;syncShow(d)}
     else{d.p.pitch=(r-1)*100;document.querySelectorAll(`[data-k="${d.k}"][data-p="pitch"]`).forEach(e=>paint(e,d.p.pitch));if(d.pl)d.pl.textContent=d.p.pitch.toFixed(1)+'%'}
   }
   refreshGrid(d);refreshGrid(o);
@@ -1579,14 +1579,14 @@ setInterval(()=>{
   for(const d of Object.values(D)){
     if(!d.synced||!d.playing||!d.buf||d.brk)continue;
     const o=D[d.syncTarget];if(!o||!o.playing||!o.buf)continue;
-    if(now-(d.gridT||0)>30000){d.gridT=now;refreshGrid(d);if(now-(o.gridT||0)>15000){o.gridT=now;refreshGrid(o)}}
+    if(now-(d.gridT||0)>10000){d.gridT=now;refreshGrid(d);if(now-(o.gridT||0)>5000){o.gridT=now;refreshGrid(o)}}
     const {r,oct,own}=syncRatio(d,o);d.syncOct=oct;
     const e=syncErr(d,o,oct);
     if(Math.abs(e)>.3){seek(d,pos(d)+e*60/own);continue}
     d.eS=(d.eS||0)*.85+e*.15;const es=d.eS;d.rc=Math.max(-.02,Math.min(.02,(d.rc||0)+(Math.abs(es)<.3?es*.0008:0)));const cur=d.rate,tgt=r*(1+d.rc+(Math.abs(es)<.012?0:Math.max(-.003,Math.min(.003,es*.3)))),step=.0015;
     const nr=Math.abs(tgt-cur)<=step?tgt:cur+Math.sign(tgt-cur)*step;
     if(Math.abs(nr-cur)>1e-5)syncRate(d,nr);
-    if(now-(d.showT||0)>300){d.showT=now;syncShow(d)}
+    if(d.syncR!==r){d.syncR=r;syncShow(d)}
   }
 },40);
 function stemFx(d){const t=AC.currentTime,f=(g,v)=>{g.gain.cancelScheduledValues(t);g.gain.setValueAtTime(g.gain.value,t);g.gain.linearRampToValueAtTime(v,t+.5)};
@@ -2198,6 +2198,7 @@ function swipeHtml(d){
   syncDeck=function(d,o){var was=d.synced;_sd(d,o);if(was&&!d.synced)d.noAuto=true;else if(d.synced)d.noAuto=false;if(d.synced&&!was){d.rc=0;d.eS=0}};
   play=function(d){
     var r=_play.apply(this,arguments);
+    try{if(d.buf&&!_onsetCache.has(d.buf))(window.requestIdleCallback||setTimeout)(function(){try{onsetEnv(d.buf)}catch(e){}})}catch(e){}
     try{
       var o=D[pair[d.k]];
       if(d.buf&&o&&o.buf&&o.playing&&!d.synced&&!o.synced&&!d.noAuto){
