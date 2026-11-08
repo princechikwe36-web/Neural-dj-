@@ -1579,7 +1579,7 @@ setInterval(()=>{
   for(const d of Object.values(D)){
     if(!d.synced||!d.playing||!d.buf||d.brk)continue;
     const o=D[d.syncTarget];if(!o||!o.playing||!o.buf)continue;
-    if(now-(d.gridT||0)>10000){d.gridT=now;refreshGrid(d);if(now-(o.gridT||0)>5000){o.gridT=now;refreshGrid(o)}}
+    if(now-(d.gridT||0)>20000){d.gridT=now;refreshGrid(d);if(now-(o.gridT||0)>10000){o.gridT=now;refreshGrid(o)}}
     const {r,oct,own}=syncRatio(d,o);d.syncOct=oct;
     const e=syncErr(d,o,oct);
     if(Math.abs(e)>.3){seek(d,pos(d)+e*60/own);continue}
@@ -1659,7 +1659,7 @@ function drawBeatMatch(c,pair,now){
       const phase=((p-(d.beatOffset||0))%beatSec+beatSec)%beatSec;
       x.strokeStyle='#ffe05a';x.lineWidth=2;
       const half=Math.max(10,amp*0.95);
-      const bo=d.beatOffset||0;
+      const bo=d.beatOffset||0,win=8;
       for(let q=Math.floor((p-win-bo)/beatSec);q<=Math.ceil((p+win-bo)/beatSec);q++){
         const xx=(((bo+q*beatSec)-p)/(2*win)+.5)*w;
         if(xx>=0&&xx<=w){x.beginPath();x.moveTo(xx,mid-half);x.lineTo(xx,mid+half);x.stroke()}
@@ -1672,8 +1672,8 @@ function wave(now=performance.now()){
   // Beat-match canvases capped to about 10 frames/second.
   if(now-lastWaveDraw<40)return;
   lastWaveDraw=now;
-  drawBeatMatch(wf,['A','B'],now);
-  drawBeatMatch($('wfCD'),['C','D'],now);
+  try{drawBeatMatch(wf,['A','B'],now)}catch(e){}
+  try{drawBeatMatch($('wfCD'),['C','D'],now)}catch(e){}
 }
 let lastVideoSync=0,lastTick=0;
 (function tick(){
@@ -2197,14 +2197,20 @@ function swipeHtml(d){
 /* Automatic sync: a deck that starts while its partner plays locks to it by itself */
 (function(){
   var _play=play,_sd=syncDeck,pair={A:'B',B:'A',C:'D',D:'C'};
-  syncDeck=function(d,o){var was=d.synced;_sd(d,o);if(was&&!d.synced)d.noAuto=true;else if(d.synced)d.noAuto=false;if(d.synced&&!was){d.rc=0;d.eS=0}};
+  window.__syncOK=function(d,o){var r;try{r=syncRatio(d,o)}catch(e){return true}return r==null||isNaN(r)||(r>.8&&r<1.2)};
+  window.__syncMsg=function(){
+    var t=document.createElement('div');t.textContent='Tempos too far apart to sync';
+    t.style.cssText='position:fixed;left:50%;top:14px;transform:translateX(-50%);z-index:99999;padding:8px 14px;border-radius:8px;font:13px sans-serif;color:#fff;background:#b45309';
+    document.body.appendChild(t);setTimeout(function(){t.remove()},2200);
+  };
+  syncDeck=function(d,o){var was=d.synced;if(!was&&!window.__syncOK(d,o)){window.__syncMsg();return}_sd(d,o);if(was&&!d.synced)d.noAuto=true;else if(d.synced)d.noAuto=false;if(d.synced&&!was){d.rc=0;d.eS=0}};
   play=function(d){
     var r=_play.apply(this,arguments);
     try{if(d.buf&&!_onsetCache.has(d.buf))(window.requestIdleCallback||setTimeout)(function(){try{onsetEnv(d.buf)}catch(e){}})}catch(e){}
     try{
       var o=D[pair[d.k]];
       if(d.buf&&o&&o.buf&&o.playing&&!d.synced&&!o.synced&&!d.noAuto){
-        setTimeout(function(){if(d.playing&&o.playing&&!d.synced&&!o.synced)_sd(d,o)},80);
+        setTimeout(function(){if(d.playing&&o.playing&&!d.synced&&!o.synced&&window.__syncOK(d,o))_sd(d,o)},80);
       }
     }catch(e){}
     return r;
