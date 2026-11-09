@@ -1668,12 +1668,16 @@ function drawBeatMatch(c,pair,now){
     }
   }
 }
+let waveGap=40;
 function wave(now=performance.now()){
-  // Beat-match canvases capped to about 10 frames/second.
-  if(now-lastWaveDraw<40)return;
+  // Beat-match canvases: draw rate adapts to how busy the phone is.
+  if(now-lastWaveDraw<waveGap)return;
   lastWaveDraw=now;
+  const t0=performance.now();
   try{drawBeatMatch(wf,['A','B'],now)}catch(e){}
   try{drawBeatMatch($('wfCD'),['C','D'],now)}catch(e){}
+  const dt=performance.now()-t0;
+  waveGap=dt>10?Math.min(120,waveGap+10):Math.max(40,waveGap-2);
 }
 let lastVideoSync=0,lastTick=0;
 (function tick(){
@@ -2206,7 +2210,7 @@ function swipeHtml(d){
   syncDeck=function(d,o){var was=d.synced;if(!was&&!window.__syncOK(d,o)){window.__syncMsg();return}_sd(d,o);if(was&&!d.synced)d.noAuto=true;else if(d.synced)d.noAuto=false;if(d.synced&&!was){d.rc=0;d.eS=0}};
   play=function(d){
     var r=_play.apply(this,arguments);
-    try{if(d.buf&&!_onsetCache.has(d.buf))(window.requestIdleCallback||setTimeout)(function(){try{onsetEnv(d.buf)}catch(e){}})}catch(e){}
+    try{if(d.buf&&!_onsetCache.has(d.buf))setTimeout(function(){(window.requestIdleCallback||setTimeout)(function(){try{onsetEnv(d.buf)}catch(e){}})},6000)}catch(e){}
     try{
       var o=D[pair[d.k]];
       if(d.buf&&o&&o.buf&&o.playing&&!d.synced&&!o.synced&&!d.noAuto){
@@ -2306,9 +2310,12 @@ registerProcessor('wsola-player',WP);`;
     d._stBusy=b;
     var n=b.length,ch=[new Int16Array(n),new Int16Array(n)],src=[b.getChannelData(0),b.getChannelData(Math.min(1,b.numberOfChannels-1))],i=0;
     (function step(){
-      var e=Math.min(n,i+400000);
-      for(;i<e;i++){for(var c=0;c<2;c++){var v=src[c][i]*32767;ch[c][i]=v>32767?32767:v<-32768?-32768:v}}
-      if(i<n)setTimeout(step,0);else{d._stCh=ch;d._stOK=b;d._stBusy=null}
+      var t0=performance.now();
+      while(i<n&&performance.now()-t0<3){
+        var e=Math.min(n,i+20000);
+        for(;i<e;i++){for(var c=0;c<2;c++){var v=src[c][i]*32767;ch[c][i]=v>32767?32767:v<-32768?-32768:v}}
+      }
+      if(i<n)setTimeout(step,24);else{d._stCh=ch;d._stOK=b;d._stBusy=null}
     })();
   }
   window.__mkSrc=function(d){
@@ -2342,7 +2349,7 @@ registerProcessor('wsola-player',WP);`;
     return _setRate(d,r);
   };
   var _p2=play;
-  play=function(d){var r=_p2.apply(this,arguments);try{prep(d)}catch(e){}return r};
+  play=function(d){var r=_p2.apply(this,arguments);setTimeout(function(){try{prep(d)}catch(e){}},3000);return r};
 })();
 </script>
 </body></html>
