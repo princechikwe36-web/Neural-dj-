@@ -23,6 +23,10 @@ jobs:
           distribution: temurin
           java-version: 17
 
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: 8.2.1
+
       - name: Prepare web files
         run: |
           mkdir -p www
@@ -47,12 +51,10 @@ jobs:
       - name: Build APK
         run: |
           cd android
-          chmod +x gradlew
-          sed -i 's/networkTimeout=10000/networkTimeout=120000/' gradle/wrapper/gradle-wrapper.properties
           ok=0
-          for i in 1 2 3; do
-            if ./gradlew assembleDebug; then ok=1; break; fi
-            sleep 20
+          for i in 1 2 3 4; do
+            if gradle assembleDebug --no-daemon; then ok=1; break; fi
+            sleep 30
           done
           [ $ok = 1 ]
 
