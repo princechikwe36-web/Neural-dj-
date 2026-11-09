@@ -48,7 +48,13 @@ jobs:
         run: |
           cd android
           chmod +x gradlew
-          ./gradlew assembleDebug
+          sed -i 's/networkTimeout=10000/networkTimeout=120000/' gradle/wrapper/gradle-wrapper.properties
+          ok=0
+          for i in 1 2 3; do
+            if ./gradlew assembleDebug; then ok=1; break; fi
+            sleep 20
+          done
+          [ $ok = 1 ]
 
       - name: Publish APK as a release
         uses: softprops/action-gh-release@v2
@@ -56,4 +62,3 @@ jobs:
           tag_name: build-${{ github.run_number }}
           name: Neural DJ build ${{ github.run_number }}
           files: android/app/build/outputs/apk/debug/app-debug.apk
-          
