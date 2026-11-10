@@ -1662,7 +1662,7 @@ function drawBeatMatch(c,pair,now){
       const bo=d.beatOffset||0,win=8;
       for(let q=Math.floor((p-win-bo)/beatSec);q<=Math.ceil((p+win-bo)/beatSec);q++){
         const xx=(((bo+q*beatSec)-p)/(2*win)+.5)*w;
-        if(xx>=0&&xx<=w){x.beginPath();x.moveTo(xx,mid-half);x.lineTo(xx,mid+half);x.stroke()}
+        if(xx>=0&&xx<=w&&window.__beatHere(d,bo+q*beatSec)){x.beginPath();x.moveTo(xx,mid-half);x.lineTo(xx,mid+half);x.stroke()}
       }
       x.fillStyle='#ff365e';x.fillRect(w/2-1,mid-amp,2,amp*2);
     }
@@ -2417,6 +2417,83 @@ registerProcessor('wsola-player',WP);`;
   var ref=host.querySelector('[data-amt="useSE"]');
   var at=ref&&ref.closest('.srow');
   if(at&&at.parentNode)at.parentNode.insertBefore(row,at);else host.appendChild(row);
+})();
+</script>
+<style>
+#libImport,#libList [data-act="load"]{display:none}
+#mixes .mi{display:flex;flex-wrap:wrap;align-items:center;gap:6px}
+#mixes .mi img.mc{width:44px;height:44px;border-radius:8px;object-fit:cover}
+#mixes .mi audio{flex:1 1 100%}
+</style>
+<script>
+/* Yellow beat lines only where the song really has beats */
+window.__beatHere=function(d,t){
+  var b=d.buf;if(!b||t<0||t>b.duration)return false;
+  var en=_onsetCache.get(b);if(!en)return true;
+  if(en.thr==null){var a=[];for(var i=0;i<en.o.length;i+=20)a.push(en.o[i]);a.sort(function(x,y){return x-y});en.thr=.3*a[Math.floor(a.length*.9)]}
+  var c=Math.round(t/en.hopSec),m=0;
+  for(var k=c-3;k<=c+3;k++){var v=en.o[k]||0;if(v>m)m=v}
+  return m>=en.thr;
+};
+/* Library: tap a song to load it; look for new songs whenever it opens */
+document.addEventListener('click',function(e){
+  var row=e.target.closest&&e.target.closest('#libList .libItem');if(!row)return;
+  if(e.target.closest('button'))return;
+  var b=row.querySelector('[data-act="load"]');if(b){e.stopPropagation();b.click()}
+},true);
+(function(){
+  var _onl=openNeuralLibrary;
+  openNeuralLibrary=function(){var r=_onl.apply(this,arguments);if(window.__scanPhone)setTimeout(window.__scanPhone,400);return r};
+})();
+/* Recorded mixes: load on a deck, add a cover photo, save to the phone */
+(function(){
+  function toast(t){var d=document.createElement('div');d.textContent=t;d.style.cssText='position:fixed;left:50%;top:14px;transform:translateX(-50%);z-index:99999;padding:8px 14px;border-radius:8px;font:13px sans-serif;color:#fff;background:#15803d';document.body.appendChild(d);setTimeout(function(){d.remove()},2500)}
+  function pickCover(m){
+    var inp=document.createElement('input');inp.type='file';inp.accept='image/*';
+    inp.onchange=function(){
+      var f=inp.files[0];if(!f)return;var img=new Image();
+      img.onload=function(){
+        var c=document.createElement('canvas'),k=Math.min(1,400/Math.max(img.width,img.height));
+        c.width=Math.round(img.width*k);c.height=Math.round(img.height*k);
+        c.getContext('2d').drawImage(img,0,0,c.width,c.height);
+        m.art=c.toDataURL('image/jpeg',.85);
+        tx('readwrite',function(s){return s.put(m)}).then(function(){showMixes()});
+      };
+      img.src=URL.createObjectURL(f);
+    };
+    inp.click();
+  }
+  function b64(blob){return new Promise(function(r){var fr=new FileReader();fr.onload=function(){r(fr.result.split(',')[1])};fr.readAsDataURL(blob)})}
+  async function savePhone(m){
+    var C=window.Capacitor,MS=C&&C.Plugins&&C.Plugins.MusicScanner;
+    if(!MS){toast('Saving works in the Android app');return}
+    try{
+      toast('Saving…');
+      await MS.saveBegin({name:m.name.replace(/[^\w ]/g,'-')+'.'+m.ext,mime:m.blob.type||'audio/mp4'});
+      var step=786432;
+      for(var o=0;o<m.blob.size;o+=step){await MS.saveChunk({data:await b64(m.blob.slice(o,o+step))})}
+      await MS.saveEnd();
+      toast('Saved in Downloads / Neural DJ');
+    }catch(err){toast((err&&err.message)||'Could not save')}
+  }
+  var _sm=showMixes;
+  showMixes=async function(){
+    await _sm.apply(this,arguments);
+    var all=[];try{all=await tx('readonly',function(s){return s.getAll()})}catch(e){return}
+    all.reverse();
+    var rows=document.querySelectorAll('#ml .mi');
+    rows.forEach(function(r,i){
+      var m=all[i];if(!m||r.dataset.x)return;r.dataset.x=1;
+      if(m.art){var im=document.createElement('img');im.className='mc';im.src=m.art;r.insertBefore(im,r.firstChild)}
+      function btn(t,fn){var b=document.createElement('button');b.textContent=t;b.onclick=fn;r.insertBefore(b,r.lastElementChild);return b}
+      btn('Load',function(){
+        window.LIB_TARGET=null;AM_LIB=false;$('mixes').classList.add('hide');
+        libLoadToDeck({title:m.name,artist:'My mix',art:m.art||null,blob:m.blob,mime:m.blob.type,filename:m.name,duration:0,bpm:0,key:'',isVideo:false,converted:false});
+      });
+      btn('Cover',function(){pickCover(m)});
+      btn('Save',function(){savePhone(m)});
+    });
+  };
 })();
 </script>
 </body></html>

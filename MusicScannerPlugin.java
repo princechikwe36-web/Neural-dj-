@@ -143,4 +143,41 @@ public class MusicScannerPlugin extends Plugin {
         } catch (Exception ignored) {}
         call.resolve();
     }
+
+    private OutputStream saveOut;
+    private Uri saveUri;
+
+    @PluginMethod
+    public void saveBegin(PluginCall call) {
+        try {
+            if (Build.VERSION.SDK_INT < 29) { call.reject("Saving needs Android 10 or newer"); return; }
+            android.content.ContentValues v = new android.content.ContentValues();
+            v.put(MediaStore.MediaColumns.DISPLAY_NAME, call.getString("name", "mix.m4a"));
+            v.put(MediaStore.MediaColumns.MIME_TYPE, call.getString("mime", "audio/mp4"));
+            v.put(MediaStore.MediaColumns.RELATIVE_PATH, "Download/Neural DJ");
+            v.put(MediaStore.MediaColumns.IS_PENDING, 1);
+            saveUri = getContext().getContentResolver().insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, v);
+            saveOut = getContext().getContentResolver().openOutputStream(saveUri);
+            call.resolve();
+        } catch (Exception e) { call.reject("Save failed: " + e.getMessage()); }
+    }
+
+    @PluginMethod
+    public void saveChunk(PluginCall call) {
+        try {
+            saveOut.write(android.util.Base64.decode(call.getString("data", ""), android.util.Base64.DEFAULT));
+            call.resolve();
+        } catch (Exception e) { call.reject("Save failed: " + e.getMessage()); }
+    }
+
+    @PluginMethod
+    public void saveEnd(PluginCall call) {
+        try {
+            saveOut.close();
+            android.content.ContentValues v = new android.content.ContentValues();
+            v.put(MediaStore.MediaColumns.IS_PENDING, 0);
+            getContext().getContentResolver().update(saveUri, v, null, null);
+            call.resolve();
+        } catch (Exception e) { call.reject("Save failed: " + e.getMessage()); }
+    }
 }
