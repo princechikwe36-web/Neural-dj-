@@ -1650,8 +1650,8 @@ function drawBeatMatch(c,pair,now){
       const stp=Math.max(1,Math.floor((2*win*n/dur)/(w/3)));
       for(let idx=Math.floor(i0/stp)*stp;idx<=i1;idx+=stp){
         let pkv=0;for(let q=Math.max(0,idx);q<idx+stp&&q<n;q++){if(d.pk[q]>pkv)pkv=d.pk[q]}
-        const xx=((idx/n*dur-p)/(2*win)+.5)*w,a=Math.max(1,pkv*amp);
-        x.fillRect(xx,mid-a,Math.max(1,bw*stp-.5),a*2);
+        const xx=((idx/n*dur-p)/(2*win)+.5)*w,a=Math.max(1,pkv*amp*.7);
+        x.fillRect(xx,mid-a,Math.max(1,bw*stp*.4),a*2);
       }
     }
     if(d.buf){
@@ -1837,7 +1837,7 @@ function amBegin(quick){
   const o=AM.cur,n=AM.idle;
   if(AM.tr||!o||!n||!n.buf||!o.playing)return false;
   const T=quick?Math.min(4,amTLen(o)):amTLen(o);
-  const sr=syncRatio(n,o);let rate=sr.r;const ok=rate>=.85&&rate<=1.15;if(!ok)rate=1;
+  const sr=syncRatio(n,o);let rate=sr.r;const ok=rate>=.85&&rate<=1.15&&AMS.autoSync!==false;if(!ok)rate=1;
   n.rate=rate;
   let type=AMS.trans;
   if(type==='auto'){const pool=ok?['eq','fade','filter','eq','echo']:['echo','filter'];type=pool[Math.floor(Math.random()*pool.length)]}
@@ -2201,20 +2201,26 @@ function swipeHtml(d){
 /* Automatic sync: a deck that starts while its partner plays locks to it by itself */
 (function(){
   var _play=play,_sd=syncDeck,pair={A:'B',B:'A',C:'D',D:'C'};
-  window.__syncOK=function(d,o){var r;try{r=syncRatio(d,o)}catch(e){return true}return r==null||isNaN(r)||(r>.8&&r<1.2)};
+  window.__syncOK=function(d,o){var q,r;try{q=syncRatio(d,o);r=q&&typeof q==='object'?q.r:q}catch(e){return true}return r==null||isNaN(r)||(r>.83&&r<1.2)};
+  window.__leaderFor=function(d){
+    var ks=['A','B','C','D'],p=D[pair[d.k]],best=null,any=null;
+    if(p&&p.buf&&p.playing&&p.syncTarget!==d.k)return p;
+    ks.forEach(function(k){var c=D[k];if(!c||c===d||!c.buf||!c.playing||c.syncTarget===d.k)return;if(!any)any=c;if(!best&&!c.synced)best=c});
+    return best||any;
+  };
   window.__syncMsg=function(){
     var t=document.createElement('div');t.textContent='Tempos too far apart to sync';
     t.style.cssText='position:fixed;left:50%;top:14px;transform:translateX(-50%);z-index:99999;padding:8px 14px;border-radius:8px;font:13px sans-serif;color:#fff;background:#b45309';
     document.body.appendChild(t);setTimeout(function(){t.remove()},2200);
   };
-  syncDeck=function(d,o){var was=d.synced;if(!was&&!window.__syncOK(d,o)){window.__syncMsg();return}_sd(d,o);if(was&&!d.synced)d.noAuto=true;else if(d.synced)d.noAuto=false;if(d.synced&&!was){d.rc=0;d.eS=0}};
+  syncDeck=function(d,o){var was=d.synced;if(!was&&(!o||!o.playing||!o.buf)){var l=window.__leaderFor(d);if(l)o=l}if(!was&&!window.__syncOK(d,o)){window.__syncMsg();return}_sd(d,o);if(was&&!d.synced)d.noAuto=true;else if(d.synced)d.noAuto=false;if(d.synced&&!was){d.rc=0;d.eS=0;['A','B','C','D'].forEach(function(k){var x=D[k];if(x&&x!==d&&x!==o&&x.buf&&x.playing&&!x.synced&&!x.noAuto&&o&&o.syncTarget!==x.k&&window.__syncOK(x,o))_sd(x,o)})}};
   play=function(d){
     var r=_play.apply(this,arguments);
     try{if(d.buf&&!_onsetCache.has(d.buf))setTimeout(function(){(window.requestIdleCallback||setTimeout)(function(){try{onsetEnv(d.buf)}catch(e){}})},6000)}catch(e){}
     try{
-      var o=D[pair[d.k]];
-      if(d.buf&&o&&o.buf&&o.playing&&!d.synced&&!o.synced&&!d.noAuto){
-        setTimeout(function(){if(d.playing&&o.playing&&!d.synced&&!o.synced&&window.__syncOK(d,o))_sd(d,o)},80);
+      if(d.buf&&!d.synced&&!d.noAuto&&(!window.__opt||window.__opt.autosync)){
+        var o=window.__leaderFor(d);
+        if(o)setTimeout(function(){if(d.playing&&o.playing&&!d.synced&&window.__syncOK(d,o))_sd(d,o)},80);
       }
     }catch(e){}
     return r;
@@ -2261,7 +2267,7 @@ class WP extends AudioWorkletProcessor{
   this.o=[new Float32Array(this.R),new Float32Array(this.R)];
   this.ch=null;this.len=0;this.run=false;this.rate=1;this.lp=false;this.ls=0;this.le=0;this.fin=false;
   this.port.onmessage=e=>{const m=e.data;
-   if(m.t==='l'){this.ch=m.ch;this.len=m.ch[0].length}
+   if(m.t==='l'){this.ch=m.ch;this.len=m.ch[0].length;const a=m.ch[0],b=m.ch[1],nn=this.len,mm=new Int16Array(nn);for(let q=0;q<nn;q++)mm[q]=(a[q]+b[q])>>1;this.m=mm}
    else if(m.t==='s'){this.o[0].fill(0);this.o[1].fill(0);this.an=m.off;this.rate=m.rate;this.lp=m.lp;this.ls=m.ls;this.le=m.le;this.k=0;this.done=0;this.rd=0;this.pc=-1;this.fin=false;this.run=true}
    else if(m.t==='r')this.rate=m.r;
    else if(m.t==='x')this.run=false;
@@ -2269,18 +2275,32 @@ class WP extends AudioWorkletProcessor{
  }
  g(c,i){if(this.lp&&i>=this.le&&this.le>this.ls)i=this.ls+((i-this.ls)%(this.le-this.ls));return(i<0||i>=this.len)?0:this.ch[c][i]/32768}
  frame(){
-  const N=this.N,H=this.H,L=this.L,D=this.D,M=this.R-1;
+  const N=this.N,H=this.H,L=this.L,D=this.D,M=this.R-1,w=this.w,o0=this.o[0],o1=this.o[1];
   let c=Math.round(this.an);
-  if(this.pc>=0){
-   const t=this.pc+H;let best=-1e30,bc=c;
-   for(let cd=c-D;cd<=c+D;cd+=4){
-    let s=0;for(let j=0;j<L;j+=8)s+=(this.g(0,cd+j)+this.g(1,cd+j))*(this.g(0,t+j)+this.g(1,t+j));
-    if(s>best){best=s;bc=cd}
+  const wk=this.k*H,ub=(this.lp&&this.le>this.ls)?this.le:this.len;
+  /* fast path: everything we read is inside the song, so use plain array reads */
+  if(c-D>=0&&Math.max(c+D+N,this.pc+H+L)<ub){
+   const m=this.m,c0=this.ch[0],c1=this.ch[1];
+   if(this.pc>=0){
+    const t=this.pc+H;let best=-1e30,bc=c;
+    for(let cd=c-D;cd<=c+D;cd+=4){
+     let s=0;for(let j=0;j<L;j+=8)s+=m[cd+j]*m[t+j];
+     if(s>best){best=s;bc=cd}
+    }
+    c=bc;
    }
-   c=bc;
+   for(let i=0;i<N;i++){const wi=w[i]*(1/32768),ix=(wk+i)&M;o0[ix]+=wi*c0[c+i];o1[ix]+=wi*c1[c+i]}
+  }else{
+   if(this.pc>=0){
+    const t=this.pc+H;let best=-1e30,bc=c;
+    for(let cd=c-D;cd<=c+D;cd+=4){
+     let s=0;for(let j=0;j<L;j+=8)s+=(this.g(0,cd+j)+this.g(1,cd+j))*(this.g(0,t+j)+this.g(1,t+j));
+     if(s>best){best=s;bc=cd}
+    }
+    c=bc;
+   }
+   for(let i=0;i<N;i++){const wi=w[i],ix=(wk+i)&M;o0[ix]+=wi*this.g(0,c+i);o1[ix]+=wi*this.g(1,c+i)}
   }
-  const wk=this.k*H;
-  for(let i=0;i<N;i++){const wi=this.w[i],ix=(wk+i)&M;this.o[0][ix]+=wi*this.g(0,c+i);this.o[1][ix]+=wi*this.g(1,c+i)}
   this.pc=c;this.an+=H*this.rate;this.k++;this.done=this.k*H;
  }
  process(inp,out){
@@ -2303,7 +2323,7 @@ registerProcessor('wsola-player',WP);`;
     var url=URL.createObjectURL(new Blob([WSRC],{type:'text/javascript'}));
     AC.audioWorklet.addModule(url).then(function(){wk=true}).catch(function(){});
   }catch(e){}
-  function ready(d){return wk&&d.buf&&d._stOK===d.buf}
+  function ready(d){return wk&&d.buf&&d._stOK===d.buf&&(!window.__opt||window.__opt.stretch)}
   /* convert the song to 16-bit in small slices, so nothing stutters */
   function prep(d){
     var b=d.buf;if(!wk||!b||d._stOK===b||d._stBusy===b)return;
@@ -2318,6 +2338,7 @@ registerProcessor('wsola-player',WP);`;
       if(i<n)setTimeout(step,24);else{d._stCh=ch;d._stOK=b;d._stBusy=null}
     })();
   }
+  setInterval(function(){['A','B','C','D'].forEach(function(k){var d=D[k];if(d&&d.buf&&!d.useVideo)try{prep(d)}catch(e){}})},2500);
   window.__mkSrc=function(d){
     if(!ready(d)||Math.abs(d.rate-1)<=.002)return AC.createBufferSource();
     var node=d.stNode;
@@ -2350,6 +2371,52 @@ registerProcessor('wsola-player',WP);`;
   };
   var _p2=play;
   play=function(d){var r=_p2.apply(this,arguments);setTimeout(function(){try{prep(d)}catch(e){}},3000);return r};
+})();
+</script>
+<script>
+/* Settings: time-stretch and auto sync switches */
+(function(){
+  function get(k,def){try{var v=localStorage.getItem(k);return v===null?def:v==='1'}catch(e){return def}}
+  window.__opt={stretch:get('nStretch',true),autosync:get('nAutoSync',true)};
+  var host=document.getElementById('sets');if(!host)return;
+  var box=document.createElement('div');box.style.cssText='margin:10px 0;padding:8px 0;border-top:1px solid #444';
+  function row(label,key,store){
+    var r=document.createElement('div');r.style.cssText='display:flex;align-items:center;justify-content:space-between;gap:8px;margin:6px 0';
+    var t=document.createElement('span');t.textContent=label;
+    var b=document.createElement('button');
+    function paint(){b.textContent=window.__opt[key]?'On':'Off';b.className=window.__opt[key]?'on':''}
+    b.onclick=function(){window.__opt[key]=!window.__opt[key];try{localStorage.setItem(store,window.__opt[key]?'1':'0')}catch(e){}paint()};
+    paint();r.appendChild(t);r.appendChild(b);box.appendChild(r);
+  }
+  row('Keep pitch when tempo changes','stretch','nStretch');
+  row('Auto sync all playing decks (A, B, C, D)','autosync','nAutoSync');
+  host.appendChild(box);
+})();
+</script>
+<style>
+/* Library: card look */
+.nlList{gap:8px;padding:6px 2px 10px}
+.libItem{background:linear-gradient(180deg,#2e2e35,#232328);border:1px solid #3d3d46;border-radius:12px;padding:8px 10px;min-height:68px;box-shadow:0 2px 6px #0006}
+.libItem:active{background:#383840}
+.libArt{width:54px;height:54px;border-radius:8px;box-shadow:0 2px 6px #0009}
+.libTags{display:flex;gap:5px;margin-top:3px}
+.libTags>*{background:#3a3a45;border-radius:999px;padding:1px 8px;font-size:9px;color:#dcdce6}
+.nlHead{padding:6px 0;border-bottom:1px solid #4a4a54}
+</style>
+<script>
+/* Auto Mix settings: auto sync switch */
+(function(){
+  var host=document.getElementById('amSets');if(!host||typeof AMS==='undefined')return;
+  var row=document.createElement('div');row.className='srow';row.textContent='Auto sync every song (match tempo)';
+  var sp=document.createElement('span'),b=document.createElement('button');
+  b.className='amR amChk';b.setAttribute('aria-label','Auto sync');b.appendChild(document.createElement('i'));
+  function paint(){b.classList.toggle('on',AMS.autoSync!==false)}
+  b.onclick=function(){AMS.autoSync=AMS.autoSync===false;try{localStorage.setItem('nAMSync',AMS.autoSync===false?'0':'1')}catch(e){}paint()};
+  try{if(localStorage.getItem('nAMSync')==='0')AMS.autoSync=false}catch(e){}
+  paint();sp.appendChild(b);row.appendChild(sp);
+  var ref=host.querySelector('[data-amt="useSE"]');
+  var at=ref&&ref.closest('.srow');
+  if(at&&at.parentNode)at.parentNode.insertBefore(row,at);else host.appendChild(row);
 })();
 </script>
 </body></html>
